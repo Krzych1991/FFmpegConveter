@@ -1,14 +1,14 @@
-import os, sys, subprocess
+import os, shutil, sys, subprocess
 
 def createOutputPath(path, suffix = None):
     filepath, filename = os.path.split(path)
-    filepath = filepath + "/convert/";
+    filename1, fileextension = os.path.splitext(filename)
+    filepath = "convert/" + filename1 + "/";
     if not os.path.exists(filepath):
         os.makedirs(filepath)
 
     if suffix is not None:
-        filename1, fileextension = os.path.splitext(filename)
-        filename = filename1 + "_" + suffix + fileextension;
+        filename = filename1 + "_" + str(suffix) + fileextension;
     return filepath + filename
 
 def changeExtension(path, extension):
@@ -32,14 +32,6 @@ for path in sys.argv[1:]:
     commands = []
     commands.append("ffmpeg")
     commands.append("-i \"" + path + "\"")
-    
-    patrSRT = changeExtension(path, "srt")
-    if os.path.isfile(patrSRT):
-        commands.append("-f srt")
-        commands.append("-i \"" + patrSRT +"\"")
-        commands.append("-scodec ass")
-        commands.append("-map 1")
-    
     commands.append("-vcodec h264")
     commands.append("-vprofile high")
     commands.append("-preset superfast")
@@ -47,24 +39,38 @@ for path in sys.argv[1:]:
     commands.append("-acodec ac3")
     commands.append("-map 0:v")
     commands.append("-map 0:a")
+    commands.append("-stats")
 
     length = getLength(path)
     size = os.path.getsize(path)
-    parts = 1 + (size / 1000000000)
+    parts = 1 + (size / 1500000000)
+    pathSRT = changeExtension(path, "srt")
+
+    if (size / length) > 1200000:
+        commands.append("-crf 31")
+    if (size / length) > 900000:
+        commands.append("-crf 29")
+    if (size / length) > 600000:
+        commands.append("-crf 27")
+    elif (size / length) > 450000:
+        commands.append("-crf 25")
 
     if parts <= 1:
         outputPath = createOutputPath(path)
         outputPath = changeExtension(outputPath, "mkv")
         commands.append("\"" + outputPath + "\"")
+        if os.path.isfile(pathSRT):
+            shutil.copyfile(pathSRT, createOutputPath(pathSRT))
     else:
         partLength = length / parts
         outputPath = createOutputPath(path, "%d")
         outputPath = changeExtension(outputPath, "mkv")
         commands.append("-segment_time " + str(partLength))
         commands.append("-f segment")
-        #commands.append("-reset_timestamps 1")
         commands.append("\"" + outputPath + "\"")
+        if os.path.isfile(pathSRT):
+            for i in range(0, parts):
+                shutil.copyfile(pathSRT, createOutputPath(pathSRT, i))
 
     executeCommands(commands)
-    
-input("Press Enter to continue...")
+
