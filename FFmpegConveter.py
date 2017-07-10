@@ -43,9 +43,14 @@ for path in sys.argv[1:]:
 
     length = getLength(path)
     size = os.path.getsize(path)
-    parts = 1 + (size / 1500000000)
+    parts = 1 + (size / 1000000000)
     pathSRT = changeExtension(path, "srt")
 
+    if os.path.isfile(pathSRT):
+        #commands.append("-vf \"drawtext=fontfile='arial.ttf': timecode='09\\:57\\:00\\:00': r=30: \\x=(w-tw)/2: y=h-(2*lh): fontcolor=white: box=1: boxcolor=0x00000000@1\"")
+        commands.append("-vf \"subtitles='" + pathSRT.replace("\\", "\\\\").replace(":", "\\:") + "':force_style='Fontsize=23'\"")
+        print "Subtitles: ", pathSRT
+		
     if (size / length) > 1200000:
         commands.append("-crf 31")
     if (size / length) > 900000:
@@ -59,18 +64,13 @@ for path in sys.argv[1:]:
         outputPath = createOutputPath(path)
         outputPath = changeExtension(outputPath, "mkv")
         commands.append("\"" + outputPath + "\"")
-        if os.path.isfile(pathSRT):
-            shutil.copyfile(pathSRT, createOutputPath(pathSRT))
     else:
-        partLength = length / parts
+        partLength = length / parts + 10
         outputPath = createOutputPath(path, "%d")
         outputPath = changeExtension(outputPath, "mkv")
         commands.append("-segment_time " + str(partLength))
         commands.append("-f segment")
         commands.append("\"" + outputPath + "\"")
-        if os.path.isfile(pathSRT):
-            for i in range(0, parts):
-                shutil.copyfile(pathSRT, createOutputPath(pathSRT, i))
 
     executeCommands(commands)
 
