@@ -18,17 +18,27 @@ def changeExtension(path, extension):
 def getLength(input_video):
     result = subprocess.Popen('ffprobe -i "' + input_video +'" -show_entries format=duration -v quiet -of csv="p=0"', stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
     output = result.communicate()
-    return int(float(output[0]))
+    return float(output[0])
 
 def executeCommands(commands):
     cmd = ' '.join(commands)
     print cmd
     os.system(cmd)
-
-print 'Number of arguments:', len(sys.argv), 'arguments.'
-print 'Argument List:', str(sys.argv)
+    
+def getCRF(Kbps):
+    if Kbps > 1200:
+        return 31
+    if Kbps > 900:
+        return 29
+    if Kbps > 600:
+        return 27
+    if Kbps > 450:
+        return 25
+    return 0
 
 for path in sys.argv[1:]:
+    print "Processing:\t", os.path.basename(path)
+    
     commands = []
     commands.append("ffmpeg")
     commands.append("-i \"" + path + "\"")
@@ -40,37 +50,28 @@ for path in sys.argv[1:]:
     commands.append("-map 0:v")
     commands.append("-map 0:a")
     commands.append("-stats")
-
+    commands.append("-fs 1900000000")
+    
     length = getLength(path)
     size = os.path.getsize(path)
-    parts = 1 + (size / 1000000000)
     pathSRT = changeExtension(path, "srt")
-
+    
     if os.path.isfile(pathSRT):
-        #commands.append("-vf \"drawtext=fontfile='arial.ttf': timecode='09\\:57\\:00\\:00': r=30: \\x=(w-tw)/2: y=h-(2*lh): fontcolor=white: box=1: boxcolor=0x00000000@1\"")
+        print "Found subtiltes"
         commands.append("-vf \"subtitles='" + pathSRT.replace("\\", "\\\\").replace(":", "\\:") + "':force_style='Fontsize=23'\"")
-        print "Subtitles: ", pathSRT
-		
-    if (size / length) > 1200000:
-        commands.append("-crf 31")
-    if (size / length) > 900000:
-        commands.append("-crf 29")
-    if (size / length) > 600000:
-        commands.append("-crf 27")
-    elif (size / length) > 450000:
-        commands.append("-crf 25")
-
-    if parts <= 1:
-        outputPath = createOutputPath(path)
+    
+    crf = getCRF((size / length) / 1000)
+    if crf > 0:
+        commands.append("-crf " + str(crf))
+    
+    part = 1
+    lengthParts = 0
+    while lengthParts + 3 < length:
+        commandsT = list(commands)
+        outputPath = createOutputPath(path, "_" + str(part))
         outputPath = changeExtension(outputPath, "mkv")
-        commands.append("\"" + outputPath + "\"")
-    else:
-        partLength = length / parts + 10
-        outputPath = createOutputPath(path, "%d")
-        outputPath = changeExtension(outputPath, "mkv")
-        commands.append("-segment_time " + str(partLength))
-        commands.append("-f segment")
-        commands.append("\"" + outputPath + "\"")
-
-    executeCommands(commands)
-
+        commandsT.append("-ss " + str(lengthParts))
+        commandsT.append("\"" + outputPath + "\"")
+        executeCommands(commandsT)
+        lengthParts = lengthParts + getLength(outputPath) - 1
+        part = part + 1
