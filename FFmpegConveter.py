@@ -1,8 +1,10 @@
 import argparse
 import os
+import pysrt
 import shutil
 import subprocess
 import sys
+import tempfile
 import helper
 
 def createOutputPath(path, suffix=None):
@@ -46,7 +48,6 @@ def main(argv):
     
     commands = []
     commands.append('ffmpeg')
-    commands.append('-noaccurate_seek')
     commands.append('-i "' + path + '"')
     commands.append('-vcodec h264')
     commands.append('-vprofile high')
@@ -61,10 +62,9 @@ def main(argv):
     size = os.path.getsize(path)
     pathSRT = changeExtension(path, 'srt')
     
-    if os.path.isfile(pathSRT):
-        commands.append('-vf "subtitles=\'' + pathSRT.replace('\\', '\\\\').replace(':', '\\:') + '\':force_style=\'Fontsize=' + str(subtitlesSize) + '\'"')
-    elif not helper.query_yes_no('Subtitles not found, continue?'):
-        quit()
+    if not os.path.isfile(pathSRT):
+        if not helper.query_yes_no('Subtitles not found, continue?'):
+            quit()
     
     crf = getCRF((size / length) / 1000)
     if crf > 0:
@@ -76,11 +76,22 @@ def main(argv):
         commandsT = list(commands)
         outputPath = createOutputPath(path, '_' + str(part))
         outputPath = changeExtension(outputPath, 'mkv')
-        commandsT.append('-ss ' + str(lengthParts))
+        
+        if os.path.isfile(pathSRT):
+            with tempfile.NamedTemporaryFile(dir='tmp', suffix='.srt', delete=False) as tmpfile:
+                subs = pysrt.open(pathSRT)
+                subs.shift(seconds=-lengthParts)
+                subs.save(tmpfile.name)
+                commandsT.append('-vf "subtitles=\'' + os.path.relpath(tmpfile.name).replace('\\', '\\\\') + '\':force_style=\'Fontsize=' + str(subtitlesSize) + '\'"')
+        
+        commandsT.insert(1, '-ss ' + str(lengthParts))
         commandsT.append('"' + outputPath + '"')
+        
         executeCommands(commandsT)
         lengthParts = lengthParts + getLength(outputPath) - 2
         part = part + 1
 
 if __name__ == '__main__':
+    if not os.path.exists('tmp'):
+        os.makedirs('tmp')
     main(sys.argv)
