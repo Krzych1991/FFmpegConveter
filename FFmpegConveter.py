@@ -54,7 +54,7 @@ def main(argv):
     commands.append('-preset superfast')
     commands.append('-threads 0')
     commands.append('-acodec ac3')
-    commands.append('-map 0:v')
+    commands.append('-map 0:v:0')
     commands.append('-map 0:a')
     commands.append('-fs 2100000000')
     
